@@ -2608,10 +2608,22 @@ ${wbText}
             }
         }, 1500);
 
-        // 恢复手机外壳状态
-        const hidePhoneShell = localStorage.getItem('hidePhoneShell') === 'true';
+        // PWA 自动全屏检测
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        const hidePhoneShell = isStandalone || localStorage.getItem('hidePhoneShell') === 'true';
         if (hidePhoneShell) document.body.classList.add('no-shell');
         if ($('shell-toggle')) $('shell-toggle').checked = hidePhoneShell;
+
+        // 双击聊天背景获取回复
+        const chatBox = document.getElementById('chat-box');
+        if (chatBox) {
+            chatBox.addEventListener('dblclick', (e) => {
+                if (e.target === chatBox) triggerAIReply();
+            });
+        }
+        
+        // 初始化通知声音
+        if ($('notify-sound-url')) $('notify-sound-url').value = localStorage.getItem('notifySoundUrl') || '';
 
         const sysNotifyEnabled = localStorage.getItem('sysNotifyEnabled') === 'true';
         if ($('sys-notify-toggle')) $('sys-notify-toggle').checked = sysNotifyEnabled;
@@ -3559,13 +3571,20 @@ ${recentHistory || '无'}
                     appendMessage(_a, 'ai', messageHistory.length);
                     messageHistory.push({ role: 'assistant', ..._a });
                     
+                    let notifyText = _a.content || '发送了一条消息';
+                    if (_a.type === 'pat_pat') notifyText = '拍了拍你';
+                    if (_a.type === 'transfer') notifyText = `向你转账 ¥${_a.amount}`;
+                    if (_a.type === 'ticket') notifyText = `发来一张票根`;
+                    if (_a.type === 'image') notifyText = `发来一张图片`;
+                    
                     if (localStorage.getItem('sysNotifyEnabled') === 'true' && Notification.permission === 'granted') {
-                        let notifyText = _a.content || '发送了一条消息';
-                        if (_a.type === 'pat_pat') notifyText = '拍了拍你';
-                        if (_a.type === 'transfer') notifyText = `向你转账 ¥${_a.amount}`;
-                        if (_a.type === 'ticket') notifyText = `发来一张票根`;
-                        if (_a.type === 'image') notifyText = `发来一张图片`;
                         new Notification(currentChatPersona.name, { body: notifyText });
+                    }
+                    // 如果不在当前聊天界面，显示横幅
+                    if (!$('chat-detail').classList.contains('open') || currentChatPersona.id !== p.id) {
+                        showAppToast(p.name, notifyText, p.avatar);
+                    } else {
+                        playTestSound(); // 在聊天界面内只播放声音
                     }
                 }
             }
@@ -3626,10 +3645,10 @@ ${recentHistory || '无'}
         const _r = document.createElement('div'); _r.className = `msg-row ${_s}`;
         const msgIndex = _idx !== undefined ? _idx : messageHistory.length;
         
+        let chk = null;
         if (isMultiSelectMode) {
-            const chk = document.createElement('div');
+            chk = document.createElement('div');
             chk.className = `msg-check-circle ${selectedMsgIndices.has(msgIndex) ? 'checked' : ''}`;
-            _r.appendChild(chk);
             _r.onclick = () => toggleMsgSelect(msgIndex);
         }
 
@@ -3835,7 +3854,13 @@ ${recentHistory || '无'}
         }
         _wrapper.appendChild(_meta);
 
-        _s === 'ai' ? _r.append(_a, _wrapper) : _r.append(_wrapper, _a);
+        if (_s === 'ai') {
+            if (chk) _r.append(chk, _a, _wrapper);
+            else _r.append(_a, _wrapper);
+        } else {
+            if (chk) _r.append(chk, _wrapper, _a);
+            else _r.append(_wrapper, _a);
+        }
         $('chat-box').appendChild(_r); 
         $('chat-box').scrollTo({ top: $('chat-box').scrollHeight, behavior: 'smooth' });
     }
@@ -5452,7 +5477,8 @@ ${recentHistory || '无'}
                 cards: [], transactions: [], isAI: true
             };
             localStorage.setItem('walletUsersDB', JSON.stringify(walletUsersDB));
-            _ui_notify_(`生成成功！账号已绑定。登录密码为: ${result.password} (请向角色询问)`);
+            _ui_notify_(`生成成功！账号已绑定。登录密码为: ${result.password}`);
+            savePersona(); // 自动保存角色
         } catch (e) {
             _ui_notify_('生成失败: ' + e.message);
         }
@@ -5950,5 +5976,37 @@ ${recentHistory || '无'}
             $(statusId).textContent = res.ok ? '连接成功！API 正常工作。' : `连接失败: HTTP ${res.status}`;
         } catch (e) { $(statusId).textContent = `请求错误: ${e.message}`; }
     }
-
-
+    // 通知声音与横幅逻辑
+    function saveNotifySound() {
+        localStorage.setItem('notifySoundUrl', $('notify-sound-url').value.trim());
+    }
+    function handleNotifySoundUpload(e) {
+        if (e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = ev => {
+                localStorage.setItem('notifySoundUrl', ev.target.result);
+                $('notify-sound-url').value = '已加载本地音频';
+                _ui_notify_('提示音已更新');
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    }
+    function playTestSound() {
+        const url = localStorage.getItem('notifySoundUrl');
+        if (url) {
+            const audio = new Audio(url);
+            audio.play().catch(e => _ui_notify_('播放失败: ' + e.message));
+        } else {
+            _ui_notify_('未设置提示音');
+        }
+    }
+    function showAppToast(name, msg, avatar) {
+        const toast = $('app-toast-banner');
+        if (!toast) return;
+        $('toast-name').textContent = name;
+        $('toast-msg').textContent = msg;
+        $('toast-avatar').src = avatar || '';
+        toast.style.transform = 'translateY(150px)';
+        playTestSound();
+        setTimeout(() => { toast.style.transform = 'translateY(0)'; }, 3000);
+    }

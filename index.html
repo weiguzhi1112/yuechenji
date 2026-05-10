@@ -1,7 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22AURA%22%2C%22short_name%22%3A%22AURA%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23000000%22%2C%22theme_color%22%3A%22%23000000%22%7D">
         <title>月沉</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
@@ -38,6 +42,10 @@
                     <div id="mind-appearance" class="mind-card-text">...</div>
                 </div>
                 <div class="mind-card-section">
+                    <div class="mind-card-label">CURRENT MOOD (当前情绪)</div>
+                    <div id="mind-mood" class="mind-card-text" style="font-weight: 600;">...</div>
+                </div>
+                <div class="mind-card-section">
                     <div class="mind-card-label">INNER VOICE (心声)</div>
                     <div id="mind-voice" class="mind-card-text" style="font-style: italic;">...</div>
                 </div>
@@ -48,6 +56,16 @@
                 <button class="glass-btn-rect" style="margin-top: 20px; width: 100%;" onclick="closeMindCard()">CLOSE</button>
             </div>
         </div>
+        
+        <!-- 消息横幅 -->
+        <div id="app-toast-banner" style="position:absolute; top:-100px; left:10px; right:10px; background:var(--glass-bg); backdrop-filter:var(--glass-blur); -webkit-backdrop-filter:var(--glass-blur); border-radius:16px; padding:12px 16px; display:flex; align-items:center; gap:12px; box-shadow:0 10px 30px rgba(0,0,0,0.15); z-index:999999; transition:transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); border:1px solid var(--glass-border);">
+            <img id="toast-avatar" src="" style="width:36px; height:36px; border-radius:10px; object-fit:cover;">
+            <div style="flex:1; overflow:hidden;">
+                <div id="toast-name" style="font-size:13px; font-weight:600; color:var(--text-main); margin-bottom:2px;">Name</div>
+                <div id="toast-msg" style="font-size:11px; color:var(--text-sub); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Message</div>
+            </div>
+        </div>
+
         <div class="status-bar" id="status-bar">
             <span id="status-time">00:00</span>
             <div style="display: flex; gap: 6px; align-items: center;">
@@ -385,6 +403,16 @@
                         <div class="modern-content">
                             <div class="modern-title">图标圆角弧度: <span><span id="icon-radius-val">16</span>px</span></div>
                             <input type="range" id="icon-radius-slider" min="0" max="30" value="16" oninput="updateIconRadius(this.value)" style="width: 100%; margin-top: 10px; accent-color: var(--text-main);">
+                        </div>
+                    </div>
+                    <div class="modern-item">
+                        <div class="modern-num">07</div>
+                        <div class="modern-content">
+                            <div class="modern-title">消息通知提示音 <button class="glass-btn-rect" style="width:auto; padding:4px 12px; margin:0; font-size:10px;" onclick="playTestSound()">试听</button></div>
+                            <div class="modern-sub">支持 URL 或本地上传</div>
+                            <input type="text" id="notify-sound-url" placeholder="输入音频 URL..." style="width:100%; margin-top:8px; background:transparent; border:none; border-bottom:1px solid var(--glass-border); color:var(--text-main); outline:none; font-size:12px; padding:4px 0;" onblur="saveNotifySound()">
+                            <input type="file" id="notify-sound-upload" accept="audio/*" style="display:none" onchange="handleNotifySoundUpload(event)">
+                            <button class="glass-btn-rect" style="margin-top:8px;" onclick="$('notify-sound-upload').click()">本地上传音频</button>
                         </div>
                     </div>
                 </div>
@@ -1341,10 +1369,6 @@
                 <div class="form-group"><label>绑定世界书</label><select id="p-worldbook-select"></select></div>
                 <div class="form-group"><label>详细人设与系统提示词 (System Prompt)</label><textarea id="p-prompt" rows="6" placeholder="详细描述TA的性格、背景、说话风格、与你的关系等。这决定了AI的灵魂..."></textarea></div>
                 
-                <div class="form-group" style="display:flex; justify-content:space-between; align-items:center;">
-                    <label style="margin-bottom:0;">开启自动总结记忆</label>
-                    <input type="checkbox" id="p-auto-sum-toggle">
-                </div>
                 <div class="form-group">
                     <label>读取线上上下文条数 (0为不限)</label>
                     <input type="number" id="p-online-ctx" placeholder="例如：20" value="0">
