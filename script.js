@@ -3788,7 +3788,7 @@ ${recentHistory || '无'}
         const _b = document.createElement('div'); _b.className = 'msg-bubble'; 
         
         if (typeof _obj === 'string') { _b.textContent = _obj; } 
-        } else if (_obj.type === 'image' || _obj.type === 'sticker') {
+        else if (_obj.type === 'image' || _obj.type === 'sticker') {
             // 统一表情包和图片大小，并支持读取 IndexedDB 大图
             const imgId = 'render_img_' + Math.random().toString(36).substr(2, 6);
             _b.innerHTML = `<img id="${imgId}" src="${(_obj.url && !_obj.url.startsWith('indexeddb:')) ? _obj.url : ''}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 8px; display: block; background: var(--glass-border);">`;
