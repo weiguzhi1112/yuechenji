@@ -3536,14 +3536,27 @@ ${wbText}
         const injectedMemoryText = getInjectedMemories(currentChatPersona.id);
 
         const sysPrompt = `
-你就是"${currentChatPersona.name}"本人，这不是角色扮演，你就是TA。绝对不要承认自己是AI或程序。
-你的详细设定：${currentChatPersona.prompt}
-${wbText}
-对话对象是 "${mask.name}"。详细设定：${mask.desc}
-${injectedMemoryText}
-近期对话上下文：
+【最高指令】你就是"${currentChatPersona.name}"本人，这不是角色扮演，你就是TA。绝对不要承认自己是AI或程序。
+
+【世界观基底】
+${wbText || '当前处于现实日常世界。'}
+
+【你的核心人设】
+${currentChatPersona.prompt}
+
+【对话对象与情感关系】
+对方是 "${mask.name}"。
+对方的详细设定：${mask.desc}
+请严格根据你们的人设差异和情感羁绊来决定你的态度（是冷漠、热情、傲娇还是顺从）。
+
+【潜意识与核心记忆】
+${injectedMemoryText || '暂无特殊记忆闪回。'}
+(注意：这些记忆是你脑海中真实发生过的事，请自然地将其融入你的情绪和反应中，不要生硬复述)
+
+【近期对话上下文】
 ${recentHistory || '无'}
 
+【输出格式要求】
 你必须返回一个纯净的 JSON 数组 []，将你的回复拆分为 3 条以上的短消息。
 要求：
 1. 消息必须碎片化，像真实人类在微信聊天一样，每条消息很短。
@@ -5577,7 +5590,8 @@ ${recentHistory || '无'}
         const targetUser = walletUsersDB[userId];
         if (targetUser.isAI) {
             const pwd = prompt(`请输入 ${targetUser.name} 的6位钱包密码\n(提示：请在聊天中询问TA)`);
-            if (pwd !== targetUser.pwd) {
+            // 修复毒瘤：AI生成的密码可能是数字，prompt获取的是字符串，必须统一转为字符串比对
+            if (pwd === null || String(pwd).trim() !== String(targetUser.pwd).trim()) {
                 return _ui_notify_('密码错误，拒绝访问');
             }
         }
@@ -6062,9 +6076,21 @@ ${recentHistory || '无'}
             $(statusId).textContent = res.ok ? '连接成功！API 正常工作。' : `连接失败: HTTP ${res.status}`;
         } catch (e) { $(statusId).textContent = `请求错误: ${e.message}`; }
     }
-    /* 通知声音与横幅逻辑 (使用 IndexedDB 突破存储限制) */
-    const dbReq = indexedDB.open("AuraDB", 1);
-    dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("media"); };
+    /* 通知声音与横幅逻辑 (使用 IndexedDB 突破存储限制，修复白屏毒瘤) */
+    function initAuraDB(callback) {
+        try {
+            const dbReq = indexedDB.open("AuraDB", 1);
+            dbReq.onupgradeneeded = e => { 
+                if (!e.target.result.objectStoreNames.contains("media")) {
+                    e.target.result.createObjectStore("media"); 
+                }
+            };
+            dbReq.onsuccess = e => { if (callback) callback(e.target.result); };
+            dbReq.onerror = () => { console.error("IndexedDB 初始化失败"); };
+        } catch (err) {
+            console.error("浏览器不支持或禁用了 IndexedDB", err);
+        }
+    }
     
     function saveNotifySound() {
         const url = $('notify-sound-url').value.trim();
@@ -6077,15 +6103,13 @@ ${recentHistory || '无'}
         if (e.target.files[0]) {
             const reader = new FileReader();
             reader.onload = ev => {
-                const dbReq = indexedDB.open("AuraDB", 1);
-                dbReq.onsuccess = e => {
-                    const db = e.target.result;
+                initAuraDB(db => {
                     const tx = db.transaction("media", "readwrite");
                     tx.objectStore("media").put(ev.target.result, "notifySound");
                     localStorage.setItem('notifySoundUrl', 'indexeddb');
                     $('notify-sound-url').value = '已加载本地音频';
                     _ui_notify_('提示音已更新并保存到本地数据库');
-                };
+                });
             };
             reader.readAsDataURL(e.target.files[0]);
         }
@@ -6094,18 +6118,16 @@ ${recentHistory || '无'}
     function playTestSound() {
         const urlType = localStorage.getItem('notifySoundUrl');
         if (urlType === 'indexeddb') {
-            const dbReq = indexedDB.open("AuraDB", 1);
-            dbReq.onsuccess = e => {
-                const db = e.target.result;
+            initAuraDB(db => {
                 const tx = db.transaction("media", "readonly");
                 const getReq = tx.objectStore("media").get("notifySound");
                 getReq.onsuccess = () => {
                     if (getReq.result) {
                         const audio = new Audio(getReq.result);
-                        audio.play().catch(err => _ui_notify_('播放失败: ' + err.message));
+                        audio.play().catch(err => console.log('播放失败: ' + err.message));
                     }
                 };
-            };
+            });
         } else if (urlType) {
             const audio = new Audio(urlType);
             audio.play().catch(err => _ui_notify_('播放失败: ' + err.message));
