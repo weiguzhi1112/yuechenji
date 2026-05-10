@@ -3092,8 +3092,9 @@ ${wbText}
         x = x - screenRect.left;
         y = y - screenRect.top;
         
+        /* 调整长按菜单的底部安全距离，防止菜单项过多时被屏幕底部截断 */
         if (x + 120 > screenRect.width) x = screenRect.width - 130;
-        if (y + 160 > screenRect.height) y = screenRect.height - 170;
+        if (y + 280 > screenRect.height) y = screenRect.height - 290;
         if (x < 10) x = 10;
         if (y < 10) y = 10;
         
@@ -3432,11 +3433,15 @@ ${wbText}
         saveChatHistory();
         cancelQuote();
         
-        /* 强制修复移动端键盘收起或发送时的页面偏移 */
+        /* 强制修复移动端键盘收起或发送时的页面偏移，适配不同系统弹性回弹 */
         setTimeout(() => {
-            window.scrollTo(0, 0);
+            window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
             document.body.scrollTop = 0;
-        }, 10);
+            document.documentElement.scrollTop = 0;
+            if (document.activeElement && document.activeElement.blur) {
+                document.activeElement.blur();
+            }
+        }, 50);
         
         // 如果被拉黑，自动回复系统提示，并拦截 AI 回复
         if (currentChatPersona.hasBlockedUser) {
@@ -3810,19 +3815,26 @@ ${recentHistory || '无'}
             if (!isMultiSelectMode) showMsgMenu(e, msgIndex, _b);
         });
 
-        // 包装气泡并添加底部时间戳/状态 (Apple iMessage 风格)
+        /* 包装气泡并添加底部时间戳/状态，处理转账卡片的贴合与对齐 */
         const _wrapper = document.createElement('div');
         _wrapper.style.display = 'flex';
         _wrapper.style.flexDirection = 'column';
         _wrapper.style.alignItems = _s === 'ai' ? 'flex-start' : 'flex-end';
         _wrapper.style.maxWidth = '70%';
-        _wrapper.style.marginTop = '0'; // 确保顶部对齐
-        _wrapper.style.gap = '2px'; // 缩小卡片与时间戳的间距
+        _wrapper.style.marginTop = '0'; 
+        if (_obj.type === 'transfer' || _obj.type === 'ticket') {
+            _wrapper.style.gap = '0px';
+        } else {
+            _wrapper.style.gap = '2px';
+        }
         
-        // 增加一个横向容器，用于放置感叹号和气泡
         const bubbleContainer = document.createElement('div');
         bubbleContainer.style.display = 'flex';
-        bubbleContainer.style.alignItems = 'center';
+        if (_obj.type === 'transfer' || _obj.type === 'ticket') {
+            bubbleContainer.style.alignItems = 'flex-start';
+        } else {
+            bubbleContainer.style.alignItems = 'center';
+        }
         bubbleContainer.style.gap = '8px';
         
         // 如果发送失败（被拉黑），在气泡左侧显示红色感叹号
