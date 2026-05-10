@@ -2620,14 +2620,17 @@ ${wbText}
     }
 
     window.onload = () => {
-        // 隐藏加载界面
-        setTimeout(() => {
+        /* 强制性修复：无论后续代码是否报错，必须保证加载界面消失，进入桌面 */
+        const forceHideLoader = () => {
             const loader = document.getElementById('boot-loader');
             if (loader) {
                 loader.style.opacity = '0';
                 setTimeout(() => loader.style.display = 'none', 800);
             }
-        }, 1500);
+        };
+        setTimeout(forceHideLoader, 1500);
+        // 额外加一层保险，防止 setTimeout 被阻塞
+        window.addEventListener('error', forceHideLoader);
 
         // PWA 自动全屏检测
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
@@ -3791,19 +3794,21 @@ ${recentHistory || '无'}
             _b.innerHTML = `<img id="${imgId}" src="${(_obj.url && !_obj.url.startsWith('indexeddb:')) ? _obj.url : ''}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 8px; display: block; background: var(--glass-border);">`;
             _b.style.cssText = 'background:transparent;padding:0;box-shadow:none;';
             
-            // 异步加载 IndexedDB 图片
+            /* 异步加载 IndexedDB 图片，增加容错防止阻塞渲染导致白屏 */
             if (_obj.url && _obj.url.startsWith('indexeddb:')) {
                 const dbKey = _obj.url.split(':')[1];
-                const dbReq = indexedDB.open("AuraDB", 1);
-                dbReq.onsuccess = event => {
-                    const db = event.target.result;
-                    const tx = db.transaction("media", "readonly");
-                    const getReq = tx.objectStore("media").get(dbKey);
-                    getReq.onsuccess = () => {
-                        const imgEl = document.getElementById(imgId);
-                        if (imgEl && getReq.result) imgEl.src = getReq.result;
-                    };
-                };
+                try {
+                    initAuraDB(db => {
+                        try {
+                            const tx = db.transaction("media", "readonly");
+                            const getReq = tx.objectStore("media").get(dbKey);
+                            getReq.onsuccess = () => {
+                                const imgEl = document.getElementById(imgId);
+                                if (imgEl && getReq.result) imgEl.src = getReq.result;
+                            };
+                        } catch(e) { console.error("读取图片失败", e); }
+                    });
+                } catch(e) { console.error("数据库调用失败", e); }
             }
         } else if (_obj.type === 'ticket') {
             _b.innerHTML = renderTicketHTML(_obj);
@@ -4475,24 +4480,24 @@ ${recentHistory || '无'}
                 const base64Data = ev.target.result;
                 const imgId = 'img_' + Date.now();
                 
-                // 存入 IndexedDB
-                const dbReq = indexedDB.open("AuraDB", 1);
-                dbReq.onsuccess = event => {
-                    const db = event.target.result;
-                    const tx = db.transaction("media", "readwrite");
-                    tx.objectStore("media").put(base64Data, imgId);
-                    
-                    // 提示输入描述
-                    showCustomPrompt('发送图片，可添加描述供AI读取:', '', desc => {
-                        // 消息中只保存 ID，渲染时再读取
-                        const msgObj = { type: 'image', url: 'indexeddb:' + imgId, content: `【图片：${desc || '无描述'}】` };
-                        appendMessage(msgObj, 'user', messageHistory.length);
-                        messageHistory.push({ role: 'user', ...msgObj });
-                        saveChatHistory();
-                        _ui_notify_('图片已发送并保存至本地数据库');
-                    });
-                };
-                dbReq.onerror = () => _ui_notify_('数据库打开失败');
+                /* 存入 IndexedDB，使用安全封装防止崩溃 */
+                initAuraDB(db => {
+                    try {
+                        const tx = db.transaction("media", "readwrite");
+                        tx.objectStore("media").put(base64Data, imgId);
+                        
+                        // 提示输入描述
+                        showCustomPrompt('发送图片，可添加描述供AI读取:', '', desc => {
+                            const msgObj = { type: 'image', url: 'indexeddb:' + imgId, content: `【图片：${desc || '无描述'}】` };
+                            appendMessage(msgObj, 'user', messageHistory.length);
+                            messageHistory.push({ role: 'user', ...msgObj });
+                            saveChatHistory();
+                            _ui_notify_('图片已发送并保存至本地数据库');
+                        });
+                    } catch(e) {
+                        _ui_notify_('图片保存失败: ' + e.message);
+                    }
+                });
             };
             reader.readAsDataURL(file);
         }
