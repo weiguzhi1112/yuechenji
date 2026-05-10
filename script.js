@@ -2215,31 +2215,33 @@ ${chatText}
     let mindHeartTimer = null;
     async function generateMindCard() {
         if (!currentChatPersona) return;
-        
         const p = currentChatPersona;
         
-        /* 强制立即显示卡片UI，消除等待的延迟感 */
+        /* 强制立即显示卡片UI */
         $('mind-avatar').src = p.avatar || '';
         $('mind-name').textContent = p.name;
         $('mind-sign').textContent = p.desc || 'No Signature';
+        $('mind-card-modal').classList.add('show');
+
+        /* 如果已经有缓存的心声（跟随回复生成的），直接显示，不再请求 */
+        if (p.latestMind) {
+            $('mind-affection').textContent = p.latestMind.affection || '50%';
+            $('mind-appearance').textContent = p.latestMind.appearance || '...';
+            $('mind-voice').textContent = p.latestMind.voice || '...';
+            $('mind-fantasy').textContent = p.latestMind.fantasy || '...';
+            startHeartBeat(p.latestMind.affection);
+            return;
+        }
+
         $('mind-affection').textContent = '...';
         $('mind-appearance').textContent = '正在感知中...';
         $('mind-voice').textContent = '正在聆听内心深处的声音...';
         $('mind-fantasy').textContent = '正在窥探...';
-        $('mind-card-modal').classList.add('show');
         
         const _u = p.apiUrl || localStorage.getItem('apiUrl');
         const _k = p.apiKey || localStorage.getItem('apiKey');
         const _m = p.apiModel || localStorage.getItem('apiModel') || 'gpt-3.5-turbo';
-        
-        const prompt = `请根据当前的聊天上下文，分析你（${p.name}）当前的状态。
-返回一个纯净的 JSON 对象，包含以下字段：
-{
-  "affection": "好感度百分比，如 85%",
-  "appearance": "你当前的穿着打扮和动作，要符合当前季节和人设，不超过30字",
-  "voice": "你此刻内心最真实的、没有说出口的想法，对用户的看法，不超过50字",
-  "fantasy": "你内心深处隐秘的幻想或渴望，不超过30字"
-}`;
+        const prompt = `请根据当前的聊天上下文，分析你（${p.name}）当前的状态。返回纯净JSON：{"affection": "85%", "appearance": "穿着打扮和动作", "voice": "内心真实想法", "fantasy": "隐秘幻想"}`;
 
         try {
             const res = await fetch(_u.replace(/\/$/, '') + (_u.endsWith('/chat/completions') ? '' : '/chat/completions'), {
@@ -2247,24 +2249,43 @@ ${chatText}
                 body: JSON.stringify({ model: _m, messages: [{role: 'system', content: p.prompt}, {role: 'user', content: prompt}], temperature: 0.8 })
             });
             const data = await res.json();
-            const content = data.choices[0].message.content.trim().replace(/```json|```/g, '').trim();
-            const result = JSON.parse(content);
+            const result = JSON.parse(data.choices[0].message.content.trim().replace(/```json|```/g, '').trim());
             
+            p.latestMind = result; /* 存入缓存 */
             $('mind-affection').textContent = result.affection || '50%';
             $('mind-appearance').textContent = result.appearance || '...';
             $('mind-voice').textContent = result.voice || '...';
             $('mind-fantasy').textContent = result.fantasy || '...';
-            
-            if (mindHeartTimer) clearInterval(mindHeartTimer);
-            mindHeartTimer = setInterval(() => {
-                const base = parseInt(result.affection) || 75;
-                const fluctuation = Math.floor(Math.random() * 10) - 5;
-                $('mind-heart-rate').textContent = base + fluctuation;
-            }, 1000);
-            
+            startHeartBeat(result.affection);
         } catch (e) {
             $('mind-voice').textContent = '感知失败，对方的心门紧闭。';
         }
+    }
+
+    function startHeartBeat(affectionStr) {
+        if (mindHeartTimer) clearInterval(mindHeartTimer);
+        mindHeartTimer = setInterval(() => {
+            const base = parseInt(affectionStr) || 75;
+            const fluctuation = Math.floor(Math.random() * 10) - 5;
+            $('mind-heart-rate').textContent = base + fluctuation;
+        }, 1000);
+    }
+
+    /* 静默生成心声（在AI回复后调用） */
+    async function generateMindCardSilent(p) {
+        if (!p) return;
+        const _u = p.apiUrl || localStorage.getItem('apiUrl');
+        const _k = p.apiKey || localStorage.getItem('apiKey');
+        const _m = p.apiModel || localStorage.getItem('apiModel') || 'gpt-3.5-turbo';
+        const prompt = `请根据刚刚的对话，分析你（${p.name}）当前的状态。返回纯净JSON：{"affection": "85%", "appearance": "穿着打扮和动作", "voice": "内心真实想法", "fantasy": "隐秘幻想"}`;
+        try {
+            const res = await fetch(_u.replace(/\/$/, '') + (_u.endsWith('/chat/completions') ? '' : '/chat/completions'), {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_k}` },
+                body: JSON.stringify({ model: _m, messages: [{role: 'system', content: p.prompt}, {role: 'user', content: prompt}], temperature: 0.8 })
+            });
+            const data = await res.json();
+            p.latestMind = JSON.parse(data.choices[0].message.content.trim().replace(/```json|```/g, '').trim());
+        } catch (e) {}
     }
 
     function closeMindCard() {
@@ -3395,11 +3416,18 @@ ${wbText}
         $('chat-sticker-suggest').style.display = 'none';
     }
 
-    // 点击外部关闭表情面板
+    /* 修复：点击外部关闭表情面板时，排除自定义选择弹窗，防止切换分组时意外关闭 */
     document.addEventListener('click', (e) => {
         const panel = $('sticker-panel');
         const btn = document.querySelector('.tool-item[onclick="triggerTool(\'sticker\')"]');
+        const selectModal = $('custom-select-modal');
+        const promptModal = $('custom-prompt-modal');
+        
         if (panel && panel.style.display !== 'none') {
+            // 如果点击的是弹窗内部，则不关闭表情面板
+            if (selectModal && selectModal.contains(e.target)) return;
+            if (promptModal && promptModal.contains(e.target)) return;
+            
             if (!panel.contains(e.target) && (!btn || !btn.contains(e.target))) {
                 panel.style.display = 'none';
             }
@@ -3433,13 +3461,11 @@ ${wbText}
         saveChatHistory();
         cancelQuote();
         
-        /* 强制修复移动端键盘收起或发送时的页面偏移，适配不同系统弹性回弹 */
+        /* 修复：移除强制回顶逻辑，保持与线下模式一致的自然滚动 */
         setTimeout(() => {
-            window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-            document.body.scrollTop = 0;
-            document.documentElement.scrollTop = 0;
-            if (document.activeElement && document.activeElement.blur) {
-                document.activeElement.blur();
+            const chatBox = document.getElementById('chat-box');
+            if (chatBox) {
+                chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
             }
         }, 50);
         
@@ -3595,6 +3621,12 @@ ${recentHistory || '无'}
             }
             
             saveChatHistory();
+            
+            /* AI回复完毕后，清空旧心声并静默生成新心声 */
+            if (currentChatPersona) {
+                currentChatPersona.latestMind = null;
+                generateMindCardSilent(currentChatPersona);
+            }
 
         } catch (e) { 
             appendMessage({ type: 'text', content: `[Error: ${e.message}]` }, 'ai', messageHistory.length); 
@@ -3740,10 +3772,26 @@ ${recentHistory || '无'}
         const _b = document.createElement('div'); _b.className = 'msg-bubble'; 
         
         if (typeof _obj === 'string') { _b.textContent = _obj; } 
-        else if (_obj.type === 'image' || _obj.type === 'sticker') {
-            // 缩小图片/表情包尺寸
-            _b.innerHTML = `<img src="${_obj.url || _obj.content}" style="max-width: 140px; max-height: 140px; object-fit: cover; border-radius: 8px; display: block;">`;
+        } else if (_obj.type === 'image' || _obj.type === 'sticker') {
+            // 统一表情包和图片大小，并支持读取 IndexedDB 大图
+            const imgId = 'render_img_' + Math.random().toString(36).substr(2, 6);
+            _b.innerHTML = `<img id="${imgId}" src="${(_obj.url && !_obj.url.startsWith('indexeddb:')) ? _obj.url : ''}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 8px; display: block; background: var(--glass-border);">`;
             _b.style.cssText = 'background:transparent;padding:0;box-shadow:none;';
+            
+            // 异步加载 IndexedDB 图片
+            if (_obj.url && _obj.url.startsWith('indexeddb:')) {
+                const dbKey = _obj.url.split(':')[1];
+                const dbReq = indexedDB.open("AuraDB", 1);
+                dbReq.onsuccess = event => {
+                    const db = event.target.result;
+                    const tx = db.transaction("media", "readonly");
+                    const getReq = tx.objectStore("media").get(dbKey);
+                    getReq.onsuccess = () => {
+                        const imgEl = document.getElementById(imgId);
+                        if (imgEl && getReq.result) imgEl.src = getReq.result;
+                    };
+                };
+            }
         } else if (_obj.type === 'ticket') {
             _b.innerHTML = renderTicketHTML(_obj);
             _b.style.cssText = 'background:transparent;padding:0;box-shadow:none;overflow:visible;';
@@ -4405,20 +4453,35 @@ ${recentHistory || '无'}
             });
         }
     }
+    /* 突破限制：使用 IndexedDB 保存聊天大图，防止 localStorage 爆满卡顿 */
     function handleRealAlbum(e) {
         if (e.target.files[0]) {
-            compressImage(e.target.files[0], 800, (dataUrl) => {
-                try {
-                    const desc = prompt('发送图片，可添加描述供AI读取:', '');
-                    if (desc !== null) {
-                        const msgObj = { type: 'image', url: dataUrl, content: `【图片：${desc}】` };
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const base64Data = ev.target.result;
+                const imgId = 'img_' + Date.now();
+                
+                // 存入 IndexedDB
+                const dbReq = indexedDB.open("AuraDB", 1);
+                dbReq.onsuccess = event => {
+                    const db = event.target.result;
+                    const tx = db.transaction("media", "readwrite");
+                    tx.objectStore("media").put(base64Data, imgId);
+                    
+                    // 提示输入描述
+                    showCustomPrompt('发送图片，可添加描述供AI读取:', '', desc => {
+                        // 消息中只保存 ID，渲染时再读取
+                        const msgObj = { type: 'image', url: 'indexeddb:' + imgId, content: `【图片：${desc || '无描述'}】` };
                         appendMessage(msgObj, 'user', messageHistory.length);
                         messageHistory.push({ role: 'user', ...msgObj });
                         saveChatHistory();
-                        _ui_notify_('图片已发送');
-                    }
-                } catch(err) { _ui_notify_('图片过大，无法保存'); }
-            });
+                        _ui_notify_('图片已发送并保存至本地数据库');
+                    });
+                };
+                dbReq.onerror = () => _ui_notify_('数据库打开失败');
+            };
+            reader.readAsDataURL(file);
         }
     }
         // ================= 全局单击标题返回桌面 =================
@@ -5345,6 +5408,7 @@ ${recentHistory || '无'}
         $('walletAuthSwitchText').innerText = walletIsLoginMode ? '没有账号？点击注册 (Register)' : '已有账号？点击登录 (Sign In)';
     };
 
+    /* 修复钱包登录：支持通过账号ID或角色昵称登录 */
     const handleWalletAuth = () => {
         const user = $('walletAuthUser').value.trim();
         const pwd = $('walletAuthPwd').value.trim();
@@ -5362,11 +5426,21 @@ ${recentHistory || '无'}
             toggleWalletAuthMode();
             $('walletAuthPwd').value = '';
         } else {
-            if(!walletUsersDB[user]) { _ui_notify_('账号不存在，请先注册'); return; }
-            if(walletUsersDB[user].pwd !== pwd) { _ui_notify_('密码错误'); return; }
+            // 查找账号：先按ID找，找不到再按名字找
+            let targetUserId = user;
+            if (!walletUsersDB[user]) {
+                const foundUser = Object.values(walletUsersDB).find(u => u.name === user);
+                if (foundUser) {
+                    targetUserId = foundUser.id;
+                } else {
+                    _ui_notify_('账号不存在，请检查账号名或先注册'); return;
+                }
+            }
             
-            walletCurrentUserId = user;
-            localStorage.setItem('walletCurrentUserId', user);
+            if(walletUsersDB[targetUserId].pwd !== pwd) { _ui_notify_('密码错误'); return; }
+            
+            walletCurrentUserId = targetUserId;
+            localStorage.setItem('walletCurrentUserId', targetUserId);
             $('walletDisplayUserName').innerText = getWalletCurUser().name;
             $('walletAuthView').classList.remove('active');
             $('walletMainView').classList.add('active');
@@ -5988,26 +6062,53 @@ ${recentHistory || '无'}
             $(statusId).textContent = res.ok ? '连接成功！API 正常工作。' : `连接失败: HTTP ${res.status}`;
         } catch (e) { $(statusId).textContent = `请求错误: ${e.message}`; }
     }
-    // 通知声音与横幅逻辑
+    /* 通知声音与横幅逻辑 (使用 IndexedDB 突破存储限制) */
+    const dbReq = indexedDB.open("AuraDB", 1);
+    dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("media"); };
+    
     function saveNotifySound() {
-        localStorage.setItem('notifySoundUrl', $('notify-sound-url').value.trim());
+        const url = $('notify-sound-url').value.trim();
+        if (url && !url.includes('已加载本地音频')) {
+            localStorage.setItem('notifySoundUrl', url);
+        }
     }
+    
     function handleNotifySoundUpload(e) {
         if (e.target.files[0]) {
             const reader = new FileReader();
             reader.onload = ev => {
-                localStorage.setItem('notifySoundUrl', ev.target.result);
-                $('notify-sound-url').value = '已加载本地音频';
-                _ui_notify_('提示音已更新');
+                const dbReq = indexedDB.open("AuraDB", 1);
+                dbReq.onsuccess = e => {
+                    const db = e.target.result;
+                    const tx = db.transaction("media", "readwrite");
+                    tx.objectStore("media").put(ev.target.result, "notifySound");
+                    localStorage.setItem('notifySoundUrl', 'indexeddb');
+                    $('notify-sound-url').value = '已加载本地音频';
+                    _ui_notify_('提示音已更新并保存到本地数据库');
+                };
             };
             reader.readAsDataURL(e.target.files[0]);
         }
     }
+    
     function playTestSound() {
-        const url = localStorage.getItem('notifySoundUrl');
-        if (url) {
-            const audio = new Audio(url);
-            audio.play().catch(e => _ui_notify_('播放失败: ' + e.message));
+        const urlType = localStorage.getItem('notifySoundUrl');
+        if (urlType === 'indexeddb') {
+            const dbReq = indexedDB.open("AuraDB", 1);
+            dbReq.onsuccess = e => {
+                const db = e.target.result;
+                const tx = db.transaction("media", "readonly");
+                const getReq = tx.objectStore("media").get("notifySound");
+                getReq.onsuccess = () => {
+                    if (getReq.result) {
+                        const audio = new Audio(getReq.result);
+                        audio.play().catch(err => _ui_notify_('播放失败: ' + err.message));
+                    }
+                };
+            };
+        } else if (urlType) {
+            const audio = new Audio(urlType);
+            audio.play().catch(err => _ui_notify_('播放失败: ' + err.message));
         } else {
             _ui_notify_('未设置提示音');
         }

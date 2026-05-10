@@ -1071,6 +1071,20 @@
         .wallet-bank-card-item.blue { background: linear-gradient(135deg, #141E30 0%, #243B55 100%); }
         .wallet-bank-card-item.green { background: linear-gradient(135deg, #0f9b0f 0%, #000000 100%); }
         .wallet-bank-card-item.purple { background: linear-gradient(135deg, #4b1248 0%, #000000 100%); }
+        .wallet-bank-card-item.red { background: linear-gradient(135deg, #8a2387 0%, #e94057 50%, #f27121 100%); }
+        .wallet-bank-card-item.cyan { background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%); }
+        .wallet-bank-card-item.orange { background: linear-gradient(135deg, #f12711 0%, #f5af19 100%); }
+        
+        /* 颜色选择器按钮的背景色 */
+        .wallet-color-option.color-black { background: #1a1a1a; }
+        .wallet-color-option.color-silver { background: #BDBDBD; }
+        .wallet-color-option.color-gold { background: #D4AF37; }
+        .wallet-color-option.color-blue { background: #243B55; }
+        .wallet-color-option.color-green { background: #0f9b0f; }
+        .wallet-color-option.color-purple { background: #4b1248; }
+        .wallet-color-option.color-red { background: #e94057; }
+        .wallet-color-option.color-cyan { background: #00b4db; }
+        .wallet-color-option.color-orange { background: #f5af19; }
         .wallet-bank-card-item::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.1) 45%, rgba(255,255,255,0.05) 50%, transparent 55%); transform: rotate(30deg); pointer-events: none; }
         .wallet-card-logo { font-family: 'Cormorant Garamond', serif; font-size: 18px; letter-spacing: 2px; }
         .wallet-card-chip { width: 35px; height: 25px; background: linear-gradient(135deg, #d4af37, #aa801e); border-radius: 4px; opacity: 0.8; }
