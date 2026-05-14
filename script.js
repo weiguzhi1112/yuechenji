@@ -1519,7 +1519,7 @@ ${chatText}
         const data = JSON.stringify(localStorage);
         const blob = new Blob([data], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = `system_backup_${Date.now()}.json`;
+        const a = document.createElement('a'); a.href = url; a.download = `月沉机数据_${Date.now()}.json`;
         a.click(); URL.revokeObjectURL(url); _ui_notify_('系统数据已导出');
     }
 
@@ -6150,3 +6150,190 @@ ${recentHistory || '无'}
         playTestSound();
         setTimeout(() => { toast.style.transform = 'translateY(0)'; }, 3000);
     }
+function checkKeywordsAndEffects(text, isAI = false) {
+    if (text.includes('爱心')) triggerCanvasEffect('heart');
+    if (text.includes('烟花')) triggerCanvasEffect('firework');
+    if (text.includes('打雷')) triggerCanvasEffect('thunder');
+    if (text.includes('猫爪')) triggerCanvasEffect('catpaw');
+
+    if (text.includes('生日快乐') || text.includes('土味情话')) {
+        shootDanmaku(text.includes('生日快乐') ? '🎂 生日快乐！' : '✨ 宝，你今天真好看 ✨');
+    }
+
+    if (text === '求签') {
+        setTimeout(() => {
+            const chatBox = document.getElementById('chat-box');
+            if(chatBox) {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'msg-row system-msg';
+                msgDiv.innerHTML = `<div class="msg-bubble">【今日运势】大吉。宜：摸鱼。忌：早起。AI毒舌：别看了，再看你也抽不到SSR。</div>`;
+                chatBox.appendChild(msgDiv);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        }, 500);
+        return true; 
+    }
+    if (text === '今日人设') {
+        const roles = ['社牛', '摆烂大王', '欧皇', '小透明'];
+        const role = roles[Math.floor(Math.random() * roles.length)];
+        setTimeout(() => {
+            const chatBox = document.getElementById('chat-box');
+            if(chatBox) {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'msg-row system-msg';
+                msgDiv.innerHTML = `<div class="msg-bubble">【今日人设】你被分配为：${role}！</div>`;
+                chatBox.appendChild(msgDiv);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        }, 500);
+        return true;
+    }
+
+    if (document.getElementById('offline-editor') && document.getElementById('offline-editor').classList.contains('open')) {
+        if (text === '出门') {
+            setTimeout(() => {
+                const stage = document.getElementById('offline-stage');
+                if(stage) {
+                    const p = document.createElement('div');
+                    p.className = 'offline-paragraph system-msg';
+                    p.innerHTML = `<div>SYSTEM</div><div>你推开门，一阵冷风吹过，遇到了一只流浪猫。</div>`;
+                    stage.appendChild(p);
+                    stage.scrollTop = stage.scrollHeight;
+                }
+            }, 500);
+            return true;
+        }
+        if (text === '打怪') {
+            setTimeout(() => {
+                const stage = document.getElementById('offline-stage');
+                if(stage) {
+                    const p = document.createElement('div');
+                    p.className = 'offline-paragraph system-msg';
+                    p.innerHTML = `<div>SYSTEM</div><div>你拔出木剑，史莱姆对你造成了 1 点伤害。</div>`;
+                    stage.appendChild(p);
+                    stage.scrollTop = stage.scrollHeight;
+                }
+            }, 500);
+            return true;
+        }
+    }
+    return false;
+}
+
+function shootDanmaku(text) {
+    const container = document.getElementById('danmaku-container');
+    if(!container) return;
+    const el = document.createElement('div');
+    el.className = 'danmaku-item';
+    el.innerText = text;
+    el.style.top = Math.random() * 80 + '%';
+    el.style.color = `hsl(${Math.random() * 360}, 100%, 70%)`;
+    el.style.fontSize = (Math.random() * 10 + 16) + 'px';
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+}
+
+function triggerCanvasEffect(type) {
+    const canvas = document.getElementById('effect-canvas');
+    if(!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    if (type === 'heart') {
+        for(let i=0; i<30; i++) {
+            setTimeout(() => {
+                ctx.fillStyle = 'red';
+                ctx.font = '30px Arial';
+                ctx.fillText('❤️', Math.random() * canvas.width, Math.random() * canvas.height);
+            }, i * 50);
+        }
+        setTimeout(() => ctx.clearRect(0, 0, canvas.width, canvas.height), 2000);
+    }
+}
+
+function applyEmotionEffects(msgElement, text) {
+    if(!msgElement) return;
+    if (text.includes('*害羞*') || text.includes('脸红')) {
+        const avatar = msgElement.querySelector('.msg-avatar');
+        if(avatar) avatar.classList.add('avatar-blush');
+    }
+    if (text.includes('*生气*') || text.includes('哼')) {
+        const bubble = msgElement.querySelector('.msg-bubble');
+        if(bubble) bubble.classList.add('bubble-shake');
+    }
+    if (text.includes('*无奈*') || text.includes('...')) {
+        const avatar = msgElement.querySelector('.msg-avatar');
+        if(avatar) avatar.classList.add('avatar-sweat');
+    }
+}
+// ==========================================
+// 灵境回溯 (梦境记录) 核心逻辑
+// ==========================================
+
+// 初始化梦境进度显示
+function initDreamProgress() {
+    let dreamCount = parseInt(localStorage.getItem('dream_count') || '0');
+    const progressText = document.getElementById('dream-progress-text');
+    if (progressText) {
+        if (dreamCount >= 3) {
+            progressText.innerText = `连续记录梦境以解锁角色深层的记忆碎片。当前进度：3/3 (已解锁隐藏记忆！)`;
+        } else {
+            progressText.innerText = `连续记录梦境以解锁角色深层的记忆碎片。当前进度：${dreamCount}/3`;
+        }
+    }
+}
+
+// 每次打开灵境回溯App时刷新进度
+document.getElementById('icon-dream').addEventListener('click', function() {
+    initDreamProgress();
+});
+
+// 解析潜意识按钮点击事件
+function analyzeDream() {
+    const input = document.getElementById('dream-input');
+    const text = input.value.trim();
+    
+    if (!text) {
+        alert('请先记录你的梦境碎片...');
+        return;
+    }
+
+    // 1. 更新本地存储的梦境记录次数
+    let dreamCount = parseInt(localStorage.getItem('dream_count') || '0');
+    dreamCount++;
+    localStorage.setItem('dream_count', dreamCount);
+    
+    // 刷新UI进度
+    initDreamProgress();
+
+    // 2. 构建发送给 AI 的潜意识解析 Prompt
+    // 严格要求 AI 遵循世界观、人设和关系进行解梦
+    let promptText = `【潜意识探索指令】\n我昨晚做了一个梦，梦境碎片如下：\n"${text}"\n\n请你严格遵循当前的世界观设定、你的人设以及我们之间的情感关系，以你的视角帮我解析这个梦境，并和我进行一段潜意识深处的对话。`;
+    
+    // 如果解锁了隐藏记忆，附加特殊指令
+    if (dreamCount === 3) {
+        promptText += `\n(系统提示：由于连续共梦，你突然回忆起了一段与我相关的、被封存的隐藏记忆片段，请在对话中自然地向我透露这段记忆。)`;
+    }
+
+    // 3. 关闭梦境 App 窗口
+    document.getElementById('dream-app-window').classList.remove('open');
+    
+    // 4. 自动跳转到聊天界面并发送消息
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+        // 将构建好的 Prompt 填入聊天输入框
+        chatInput.value = promptText;
+        
+        // 尝试调用现有的发送消息函数
+        if (typeof sendUserMessage === 'function') {
+            sendUserMessage();
+        } else {
+            // 如果找不到函数，则聚焦输入框让用户手动按回车
+            chatInput.focus();
+        }
+    }
+    
+    // 5. 清空梦境输入框，为下次记录做准备
+    input.value = ''; 
+}
